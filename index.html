@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Tracker Calendar</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🍽️</text></svg>"
+        type="image/svg+xml">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #f0fdf4 0%, #fef3c7 50%, #fce7f3 100%);
+            min-height: 100vh;
+        }
+
+        .day:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px rgba(236, 72, 153, 0.2);
+        }
+
+        .day {
+            background: linear-gradient(135deg, #ffffff 0%, #f9fce4 100%);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .day.active {
+            border-color: #ec4899;
+        }
+
+        .calendar-header {
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+        }
+    </style>
+</head>
+
+<body class="text-gray-800 p-3">
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-2xl p-4 shadow-lg" id="calendarContainer">
+            <div class="calendar-header text-white rounded-xl p-3 mb-3">
+                <h1 class="text-2xl font-bold mb-1">🍽️ Food Tracker Calendar</h1>
+                <p class="text-pink-100 text-xs">✓ = Eaten | ✗ = Not Eaten</p>
+            </div>
+
+            <div class="flex justify-between items-center mb-3">
+                <button id="prev"
+                    class="px-6 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl font-semibold hover:shadow-lg transition">←</button>
+                <h2 id="monthLabel" class="text-3xl font-bold text-gray-800"></h2>
+                <button id="next"
+                    class="px-6 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl font-semibold hover:shadow-lg transition">→</button>
+            </div>
+
+            <div class="grid grid-cols-7 gap-1 text-center mb-2 font-bold text-gray-700 text-xs">
+                <div>Sun</div>
+                <div>Mon</div>
+                <div>Tue</div>
+                <div>Wed</div>
+                <div>Thu</div>
+                <div>Fri</div>
+                <div>Sat</div>
+            </div>
+
+            <div id="calendar" class="grid grid-cols-7 gap-1 mb-3"></div>
+
+            <div class="grid md:grid-cols-3 gap-2 mb-3">
+                <div
+                    class="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg p-2 border-2 border-emerald-300">
+                    <div class="text-xs font-semibold text-emerald-700">✓ Eaten</div>
+                    <div id="eatenCount" class="text-xl font-bold text-emerald-600">0</div>
+                </div>
+                <div class="bg-gradient-to-br from-rose-50 to-rose-100 rounded-lg p-2 border-2 border-rose-300">
+                    <div class="text-xs font-semibold text-rose-700">✗ Not Eaten</div>
+                    <div id="missedCount" class="text-xl font-bold text-rose-600">0</div>
+                </div>
+                <div class="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-2 border-2 border-cyan-300">
+                    <div class="text-xs font-semibold text-cyan-700">Total Days Tracked</div>
+                    <div id="totalCount" class="text-xl font-bold text-cyan-600">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-center mt-4">
+            <button id="downloadPdf" type="button"
+                class="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg font-bold hover:shadow-lg transition text-sm">
+                📥 Download as PDF
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const calendar = document.getElementById("calendar");
+        const monthLabel = document.getElementById("monthLabel");
+
+        let current = new Date();
+        let states = JSON.parse(localStorage.getItem("foodTracker") || "{}");
+
+        function save() {
+            localStorage.setItem("foodTracker", JSON.stringify(states));
+            updateStats();
+        }
+
+        function updateStats() {
+            let eaten = 0, missed = 0;
+            Object.values(states).forEach(v => {
+                if (v === "tick") eaten++;
+                if (v === "cross") missed++;
+            });
+            document.getElementById("eatenCount").textContent = eaten;
+            document.getElementById("missedCount").textContent = missed;
+            document.getElementById("totalCount").textContent = eaten + missed;
+        }
+
+        function render() {
+            calendar.innerHTML = "";
+            const year = current.getFullYear();
+            const month = current.getMonth();
+
+            monthLabel.textContent = new Date(year, month).toLocaleString("en-US", { month: "long", year: "numeric" });
+
+            const first = new Date(year, month, 1).getDay();
+            const days = new Date(year, month + 1, 0).getDate();
+
+            for (let i = 0; i < first; i++) {
+                const div = document.createElement("div");
+                calendar.appendChild(div);
+            }
+
+            for (let d = 1; d <= days; d++) {
+                const key = `${year}-${month + 1}-${d}`;
+                const state = states[key];
+
+                const div = document.createElement("div");
+                div.className = "day rounded-lg p-2 min-h-[50px] cursor-pointer font-semibold text-sm flex flex-col items-center justify-center";
+
+                let badge = "";
+                if (state === "tick") {
+                    badge = '<div class="text-lg text-emerald-500">✓</div>';
+                    div.classList.add("active");
+                }
+                if (state === "cross") {
+                    badge = '<div class="text-lg text-rose-500">✗</div>';
+                    div.classList.add("active");
+                }
+
+                div.innerHTML = `
+      <div>${d}</div>
+      <div class="mt-1">${badge}</div>
+   `;
+
+                div.onclick = () => {
+                    const now = states[key];
+                    if (!now) states[key] = "tick";
+                    else if (now === "tick") states[key] = "cross";
+                    else delete states[key];
+                    save();
+                    render();
+                };
+
+                calendar.appendChild(div);
+            }
+            updateStats();
+        }
+
+        document.getElementById("prev").onclick = () => {
+            current.setMonth(current.getMonth() - 1);
+            render();
+        };
+
+        document.getElementById("next").onclick = () => {
+            current.setMonth(current.getMonth() + 1);
+            render();
+        };
+
+        document.getElementById("downloadPdf").onclick = () => {
+            const element = document.getElementById("calendarContainer");
+            const opt = {
+                margin: 10,
+                filename: `food-tracker-${new Date().toISOString().split('T')[0]}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+            };
+
+            html2pdf()
+                .set(opt)
+                .from(element)
+                .save()
+                .catch(err => {
+                    console.error('PDF download error:', err);
+                    alert('PDF download failed. Please try again.');
+                });
+        };
+
+        render();
+    </script>
+</body>
+
+</html>
